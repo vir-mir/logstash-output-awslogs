@@ -45,11 +45,11 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
       event_log_group_name = event_log_names[0]
       event_log_stream_name = event_log_names[1]
       unless sequence_tokens.keys.include? event_log_group_name
-        sequence_tokens.store(event_log_group_name, [])
+        sequence_tokens.store(event_log_group_name, {})
         begin
           @client.describe_log_streams({log_group_name: event_log_group_name}).each do |response|
             response.log_streams.each do |log_stream_data|
-              sequence_tokens[event_log_group_name].push({ "#{log_stream_data.log_stream_name}": "#{log_stream_data.upload_sequence_token}"})
+              sequence_tokens[event_log_group_name]["#{log_stream_data.log_stream_name}"] = "#{log_stream_data.upload_sequence_token}"
             end
           end
         rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException => e
