@@ -1,11 +1,11 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-output-awslogs'
-  s.version       = '0.1.0'
+  s.version       = '0.1.8'
   s.licenses      = ['Apache-2.0']
   s.summary       = 'Writes events to AWS CloudWatch logs.'
   s.homepage      = 'https://github.com/rickycook/logstash-output-awslogs'
-  s.authors       = ['Ricky Cook']
-  s.email         = 'logstash-output-awslogs@auto.thatpanda.com'
+  s.authors       = ['Anton Klyba']
+  s.email         = 'anarhyst266+gems@gmail.com'
   s.require_paths = ['lib']
 
   # Files
