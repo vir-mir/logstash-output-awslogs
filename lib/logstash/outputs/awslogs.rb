@@ -107,6 +107,8 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
         rescue Aws::CloudWatchLogs::Errors::ThrottlingException => e
           @logger.info('Creating log streams throttling, retry')
           retry
+        rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException => e
+          @logger.info("Log stream #{send_opts[:log_stream_name]} already exists")
         end
       end
       begin
