@@ -52,7 +52,7 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
       begin
         @client.describe_log_streams({log_group_name: event_log_group_name}).each do |response|
           response.log_streams.each do |log_stream_data|
-            unless log_stream_data.upload_sequence_token.empty?
+            unless log_stream_data.upload_sequence_token&.empty?
               sequence_tokens[event_log_group_name][log_stream_data.log_stream_name.to_s] = log_stream_data.upload_sequence_token.to_s
             end
           end
@@ -86,7 +86,7 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
 
       if @next_sequence_tokens.keys.include? next_sequence_token_key
         send_opts[:sequence_token] = @next_sequence_tokens[next_sequence_token_key]
-      elsif sequence_tokens[event_log_group_name].keys.include? event_log_stream_name && !sequence_tokens[event_log_group_name][event_log_stream_name].empty?
+      elsif !sequence_tokens[event_log_group_name][event_log_stream_name]&.empty?
         send_opts[:sequence_token] = sequence_tokens[event_log_group_name][event_log_stream_name]
       else
         begin
