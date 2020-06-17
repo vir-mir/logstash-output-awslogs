@@ -30,7 +30,7 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
     to_send = {}
     sequence_tokens = {}
 
-    events_and_encoded.each do |event, _encoded|
+    events_and_encoded.each do |event, encoded|
       event_log_stream_name = event.sprintf(log_stream_name)
       event_log_group_name = event.sprintf(log_group_name)
 
@@ -38,10 +38,17 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
       unless to_send.keys.include? next_sequence_token_key
         to_send.store(next_sequence_token_key, [])
       end
-      to_send[next_sequence_token_key].push(
-        timestamp: (event.timestamp.time.to_f * 1000).to_int,
-        message: event.get('message')
-      )
+      if event.get('message').empty?
+        to_send[next_sequence_token_key].push(
+          timestamp: (event.timestamp.time.to_f * 1000).to_int,
+          message: encoded
+        )
+      else
+        to_send[next_sequence_token_key].push(
+            timestamp: (event.timestamp.time.to_f * 1000).to_int,
+            message: event.get('message')
+        )
+      end
     end
 
     group_names = []
