@@ -47,6 +47,9 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
     group_names = []
     to_send.each do |event_log_names, _events|
       event_log_group_name = event_log_names[0]
+      event_log_stream_name = event_log_names[1]
+      next_sequence_token_key = [event_log_group_name, event_log_stream_name]
+      next if @next_sequence_tokens.keys.include? next_sequence_token_key
       unless group_names.include? event_log_group_name
         group_names.push(event_log_group_name)
       end
