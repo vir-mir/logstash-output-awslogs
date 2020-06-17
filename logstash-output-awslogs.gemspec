@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-output-awslogs'
-  s.version       = '0.1.9'
+  s.version       = '0.1.17'
   s.licenses      = ['Apache-2.0']
   s.summary       = 'Writes events to AWS CloudWatch logs.'
   s.homepage      = 'https://github.com/rickycook/logstash-output-awslogs'
