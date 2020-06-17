@@ -44,25 +44,32 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
       )
     end
 
+    group_names = []
     to_send.each do |event_log_names, _events|
       event_log_group_name = event_log_names[0]
-      next if sequence_tokens.keys.include? event_log_group_name
+      unless group_names.include? event_log_group_name
+        group_names.push(event_log_group_name)
+      end
+    end
 
-      sequence_tokens.store(event_log_group_name, {})
+    group_names.each do |log_group_name|
+      unless sequence_tokens.keys.include? log_group_name
+        sequence_tokens.store(log_group_name, {})
+      end
       begin
-        @client.describe_log_streams({log_group_name: event_log_group_name}).each do |response|
+        @client.describe_log_streams({log_group_name: log_group_name}).each do |response|
           response.log_streams.each do |log_stream_data|
             unless log_stream_data.upload_sequence_token&.empty?
-              sequence_tokens[event_log_group_name][log_stream_data.log_stream_name.to_s] = log_stream_data.upload_sequence_token.to_s
+              sequence_tokens[log_group_name][log_stream_data.log_stream_name.to_s] = log_stream_data.upload_sequence_token.to_s
             end
           end
         end
       rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException => e
-        @logger.info('Will create log group/stream and retry')
+        @logger.info("Will create log group #{log_group_name} and retry")
         begin
-          @client.create_log_group({log_group_name: event_log_group_name})
+          @client.create_log_group({log_group_name: log_group_name})
         rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException => e
-          @logger.info("Log group #{event_log_group_name} already exists")
+          @logger.info("Log group #{log_group_name} already exists")
         end
         retry
       rescue Aws::CloudWatchLogs::Errors::ThrottlingException => e
