@@ -38,7 +38,7 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
       unless to_send.keys.include? next_sequence_token_key
         to_send.store(next_sequence_token_key, [])
       end
-      if event.get('message').empty?
+      if event.get('message')&.empty?
         to_send[next_sequence_token_key].push(
           timestamp: (event.timestamp.time.to_f * 1000).to_int,
           message: encoded
