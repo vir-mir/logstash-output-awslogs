@@ -144,14 +144,13 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
           @logger.info("Log stream #{send_opts[:log_stream_name]} already exists")
         end
         retry
-        # TODO: handle rejected events with debug message
       rescue  Aws::CloudWatchLogs::Errors::InvalidSequenceTokenException => e
-        send_opts[:sequence_token] = e.expected_sequence_token
+        send_opts[:sequence_token] = e[:expected_sequence_token]
         retry
       rescue Aws::CloudWatchLogs::Errors::ThrottlingException => e
         @logger.info('Logs throttling, retry')
         retry
       end
     end
-  end # def multi_receive_encoded
+  end # def multi_receive_encodeds
 end # class LogStash::Outputs::Awslogs
