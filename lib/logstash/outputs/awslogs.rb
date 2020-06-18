@@ -145,7 +145,14 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
         end
         retry
       rescue  Aws::CloudWatchLogs::Errors::InvalidSequenceTokenException => e
-        send_opts[:sequence_token] = e[:expected_sequence_token]
+        @logger.info(e.code)
+        response = @client.describe_log_streams({log_group_name: send_opts[:log_group_name], log_stream_name_prefix: send_opts[:log_stream_name]})
+        response.log_streams.each do |stream_data|
+          if stream_data.log_stream_name == send_opts[:log_stream_name]
+            send_opts[:sequence_token] = stream_data.upload_sequence_token
+            break
+          end
+        end
         retry
       rescue Aws::CloudWatchLogs::Errors::ThrottlingException => e
         @logger.info('Logs throttling, retry')
