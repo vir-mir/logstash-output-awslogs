@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-output-awslogs'
-  s.version       = '1.0.0'
+  s.version       = '1.1.1'
   s.licenses      = ['Apache-2.0']
   s.summary       = 'Writes events to AWS CloudWatch logs.'
   s.homepage      = 'https://github.com/Anarhyst266/logstash-output-awslogs'
@@ -19,7 +19,8 @@ Gem::Specification.new do |s|
   # Gem dependencies
   s.add_runtime_dependency "logstash-core-plugin-api", "~> 2.0"
   s.add_runtime_dependency "logstash-codec-plain"
-  s.add_runtime_dependency 'logstash-mixin-aws-v3sdk', '~> 1'
   s.add_runtime_dependency "aws-sdk-cloudwatchlogs", '~> 1'
+  s.add_runtime_dependency "logstash-integration-aws"
+  s.add_runtime_dependency "json"
   s.add_development_dependency "logstash-devutils"
 end
