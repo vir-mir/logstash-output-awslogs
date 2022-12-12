@@ -6,7 +6,6 @@ require 'logstash/plugin_mixins/aws_config'
 require 'aws-sdk-cloudwatchlogs'
 require 'json'
 
-Aws.eager_autoload!
 
 class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
   include LogStash::PluginMixins::AwsConfig::V2
