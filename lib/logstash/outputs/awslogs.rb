@@ -4,7 +4,6 @@ require 'logstash/outputs/base'
 require 'logstash/namespace'
 require 'logstash/plugin_mixins/aws_config'
 require 'aws-sdk-cloudwatchlogs'
-require 'json'
 
 
 class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
@@ -12,75 +11,111 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
 
   config_name 'awslogs'
   default :codec, 'line'
+  concurrency :shared
 
+  PER_EVENT_OVERHEAD = 26
+  MAX_BATCH_SIZE = 1024 * 1024
+
+  # Log group to send event to
   config :log_group_name, validate: :string, required: true
+  # Logs stream to send event to
   config :log_stream_name, validate: :string, required: true
+  # Message to be sent. Fields interpolation supported. By default the whole event will be sent as a json object
+  config :message, validate: :string, default: ""
 
   public
   def register
     @client = Aws::CloudWatchLogs::Client.new(aws_options_hash)
-    @next_sequence_tokens = {}
   end # def register
 
   public
   def multi_receive(events)
-    to_send = {}
+    send_batches = form_event_batches(events)
+    send_batches.each do |batch|
+      put_events(batch)
+    end
+  end
 
-    events.each do |event|
+  private
+  def put_events(batch)
+    begin
+      @client.put_log_events(
+        {
+          log_group_name: batch[:log_group],
+          log_stream_name: batch[:log_stream],
+          log_events: batch[:log_events]
+        }
+      )
+    rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException
+      @logger.info('AWSLogs: Will create log group/stream and retry')
+      begin
+        @client.create_log_group({log_group_name: batch[:log_group]})
+      rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException
+        @logger.info("AWSLogs: Log group #{batch[:log_group]} already exists")
+      end
+      begin
+        @client.create_log_stream({log_group_name: batch[:log_group], log_stream_name: batch[:log_stream]})
+      rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException
+        @logger.info("AWSLogs: Log stream #{batch[:log_stream]} already exists")
+      end
+      retry
+    end
+  end
+
+  private
+  def form_event_batches(events_arr)
+    batches = []
+    events_by_stream_and_group = {}
+    # events_by_stream_and_group = {
+    # ['group','stream'] => [{timestamp => 1, message => "message1"},{timestamp => 2, message => "mesage2"}],
+    # ['group2','stream2'] => [{timestamp => 3, message => "message3"},{timestamp => 4, message => "message4"}]
+    # }
+    log_events = events_arr.sort_by { |event| event.timestamp.time.to_f}
+    log_events.each do |event|
       event_log_stream_name = event.sprintf(log_stream_name)
       event_log_group_name = event.sprintf(log_group_name)
 
-      next_sequence_token_key = [event_log_group_name, event_log_stream_name]
-      unless to_send.keys.include? next_sequence_token_key
-        to_send.store(next_sequence_token_key, [])
+      sort_key = [event_log_group_name, event_log_stream_name]
+      unless events_by_stream_and_group.keys.include? sort_key
+        events_by_stream_and_group.store(sort_key, [])
       end
-      to_send[next_sequence_token_key].push(
-        timestamp: (event.timestamp.time.to_f * 1000).to_int,
-        message: event.to_hash.sort.to_h.to_json
-      )
+      if message.empty?
+        events_by_stream_and_group[sort_key].push(
+          timestamp: (event.timestamp.time.to_f * 1000).to_int,
+          message: event.to_hash.sort.to_h.to_json
+        )
+      else
+        events_by_stream_and_group[sort_key].push(
+          timestamp: (event.timestamp.time.to_f * 1000).to_int,
+          message: event.sprintf(message)
+        )
+      end
     end
-
-
-    to_send.each do |event_log_names, log_events|
-      event_log_group_name = event_log_names[0]
-      event_log_stream_name = event_log_names[1]
-      next_sequence_token_key = [event_log_group_name, event_log_stream_name]
-
-      log_events.sort_by!{ |event| event[:timestamp] }
-
-      ident_opts = {
-        log_group_name: event_log_group_name,
-        log_stream_name: event_log_stream_name
+    events_by_stream_and_group.each do |key, value|
+      temp_batch = {
+        log_group: key[0],
+        log_stream: key[1],
+        size: 0,
+        log_events: []
       }
-      send_opts = ident_opts.merge(
-        log_events: log_events
-      )
-      if @next_sequence_tokens.keys.include? next_sequence_token_key
-        send_opts[:sequence_token] = @next_sequence_tokens[next_sequence_token_key]
-      end
-      begin
-        resp = @client.put_log_events(send_opts)
-        @next_sequence_tokens.store(next_sequence_token_key, resp.next_sequence_token)
-      rescue Aws::CloudWatchLogs::Errors::ResourceNotFoundException
-        @logger.info('Will create log group/stream and retry')
-        begin
-          @client.create_log_group({log_group_name: send_opts[:log_group_name]})
-        rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException
-          @logger.info("Log group #{send_opts[:log_group_name]} already exists")
+      value.each do |log_event|
+        if log_event[:message].bytesize + PER_EVENT_OVERHEAD + temp_batch[:size] < MAX_BATCH_SIZE
+          temp_batch[:size] += log_event[:message].bytesize + PER_EVENT_OVERHEAD
+          temp_batch[:log_events] << log_event
+        else
+          batches << temp_batch
+          temp_batch = {
+            log_group: key[0],
+            log_stream: key[1],
+            size: 0,
+            log_events: []
+          }
+          temp_batch[:size] += log_event[:message].bytesize + PER_EVENT_OVERHEAD
+          temp_batch[:log_events] << log_event
         end
-        begin
-          @client.create_log_stream({log_group_name: send_opts[:log_group_name], log_stream_name: send_opts[:log_stream_name]})
-        rescue Aws::CloudWatchLogs::Errors::ResourceAlreadyExistsException
-          @logger.info("Log stream #{send_opts[:log_stream_name]} already exists")
-        end
-        retry
-      rescue  Aws::CloudWatchLogs::Errors::InvalidSequenceTokenException => e
-        send_opts[:sequence_token] = e.expected_sequence_token
-        retry
-      rescue Aws::CloudWatchLogs::Errors::ThrottlingException
-        @logger.info('Logs throttling, retry')
-        retry
       end
+      batches << temp_batch
     end
-  end # def multi_receive_encodeds
-end # class LogStash::Outputs::Awslogs
+    batches
+  end
+end
