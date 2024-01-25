@@ -4,6 +4,7 @@ require 'logstash/outputs/base'
 require 'logstash/namespace'
 require 'logstash/plugin_mixins/aws_config'
 require 'aws-sdk-cloudwatchlogs'
+require 'time'
 
 
 class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
@@ -15,6 +16,7 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
 
   PER_EVENT_OVERHEAD = 26
   MAX_BATCH_SIZE = 1024 * 1024
+  MIN_DELAY = 0.2
 
   # Log group to send event to
   config :log_group_name, validate: :string, required: true
@@ -26,6 +28,7 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
   public
   def register
     @client = Aws::CloudWatchLogs::Client.new(aws_options_hash)
+    @last_flush = Time.now.to_f
   end # def register
 
   public
@@ -39,6 +42,8 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
   private
   def put_events(batch)
     begin
+      delay = MIN_DELAY - (Time.now.to_f - @last_flush)
+      sleep(delay) if delay > 0
       @client.put_log_events(
         {
           log_group_name: batch[:log_group],
@@ -60,16 +65,17 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
       end
       retry
     end
+    rescue Aws::CloudWatchLogs::Errors::LimitExceededException
+      @logger.info("AWSLogs: Rate limit exceeded, retrying")
+      retry
+    end
+    @last_flush = Time.now.to_f
   end
 
   private
   def form_event_batches(events_arr)
     batches = []
     events_by_stream_and_group = {}
-    # events_by_stream_and_group = {
-    # ['group','stream'] => [{timestamp => 1, message => "message1"},{timestamp => 2, message => "mesage2"}],
-    # ['group2','stream2'] => [{timestamp => 3, message => "message3"},{timestamp => 4, message => "message4"}]
-    # }
     log_events = events_arr.sort_by { |event| event.timestamp.time.to_f}
     log_events.each do |event|
       event_log_stream_name = event.sprintf(log_stream_name)
