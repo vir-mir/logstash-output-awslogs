@@ -64,7 +64,6 @@ class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
         @logger.info("AWSLogs: Log stream #{batch[:log_stream]} already exists")
       end
       retry
-    end
     rescue Aws::CloudWatchLogs::Errors::LimitExceededException
       @logger.info("AWSLogs: Rate limit exceeded, retrying")
       retry
