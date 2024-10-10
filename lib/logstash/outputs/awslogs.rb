@@ -3,7 +3,7 @@
 require 'logstash/outputs/base'
 require 'logstash/namespace'
 require 'logstash/plugin_mixins/aws_config'
-require 'aws-sdk-cloudwatchlogs'
+require "aws-sdk"
 require 'time'
 
 
