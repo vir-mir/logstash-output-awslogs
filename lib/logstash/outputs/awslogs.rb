@@ -4,7 +4,7 @@ require 'logstash/outputs/base'
 require 'logstash/namespace'
 require 'logstash/plugin_mixins/aws_config'
 require 'aws-sdk-cloudwatchlogs'
-require 'time'
+require "aws-sdk"
 
 
 class LogStash::Outputs::Awslogs < LogStash::Outputs::Base
